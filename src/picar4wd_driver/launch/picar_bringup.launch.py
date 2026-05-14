@@ -1,30 +1,28 @@
 from launch import LaunchDescription
 from launch_ros.actions import Node
+from launch.actions import TimerAction
 
 def generate_launch_description():
     return LaunchDescription([
-        # Motor driver node
+        # RPLiDAR A1 — start FIRST, let it stabilize
         Node(
-            package='picar4wd_driver',
-            executable='motor_driver_node',
-            name='motor_driver_node',
-            output='screen',
-            parameters=[{'max_speed': 50}],
-        ),
-
-        # Sonar scanner node
-        Node(
-            package='picar4wd_driver',
-            executable='sonar_node',
-            name='sonar_scanner_node',
+            package='rplidar_ros',
+            executable='rplidar_composition',
+            name='rplidar_node',
             output='screen',
             parameters=[{
-                'angle_min': -60.0,
-                'angle_max': 60.0,
-                'angle_step': 10.0,
-                'max_range': 3.0,
-                'scan_rate': 1.0,
+                'serial_port': '/dev/rplidar',
+                'frame_id': 'lidar_link',
+                'angle_compensate': True,
             }],
+        ),
+
+        # Static TF: base_link -> lidar_link
+        Node(
+            package='tf2_ros',
+            executable='static_transform_publisher',
+            name='base_to_lidar_tf',
+            arguments=['-0.05', '0', '0.10', '0', '0', '0', 'base_link', 'lidar_link'],
         ),
 
         # Odometry node
@@ -35,11 +33,17 @@ def generate_launch_description():
             output='screen',
         ),
 
-        # Static TF: base_link -> sonar_link
-        Node(
-            package='tf2_ros',
-            executable='static_transform_publisher',
-            name='base_to_sonar_tf',
-            arguments=['0.08', '0', '0.05', '0', '0', '0', 'base_link', 'sonar_link'],
+        # Motor driver — delayed to avoid current spike conflict
+        TimerAction(
+            period=10.0,
+            actions=[
+                Node(
+                    package='picar4wd_driver',
+                    executable='motor_driver_node',
+                    name='motor_driver_node',
+                    output='screen',
+                    parameters=[{'max_speed': 50}],
+                ),
+            ],
         ),
     ])

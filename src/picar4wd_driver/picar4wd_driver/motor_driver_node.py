@@ -22,8 +22,8 @@ class MotorDriverNode(Node):
         linear_x = msg.linear.x
         angular_z = msg.angular.z
 
-        left_speed = int((linear_x + angular_z) * self.max_speed)
-        right_speed = int((linear_x - angular_z) * self.max_speed)
+        left_speed = int((linear_x - angular_z) * self.max_speed)
+        right_speed = int((linear_x + angular_z) * self.max_speed)
 
         left_speed = max(-100, min(100, left_speed))
         right_speed = max(-100, min(100, right_speed))
