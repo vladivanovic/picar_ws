@@ -39,8 +39,8 @@ def generate_launch_description():
             ),
             DeclareLaunchArgument(
                 "dst_cmd_vel",
-                default_value="/cmd_vel",
-                description="Topic the simulator / base listens on (TurtleBot3 Gazebo: /cmd_vel)",
+                default_value="/picar_pi/cmd_vel",
+                description="Topic the robot hardware listens on (Pi namespace: /picar_pi/cmd_vel)",
             ),
             Node(
                 package="agenticros_bringup",

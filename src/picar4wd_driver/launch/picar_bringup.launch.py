@@ -1,6 +1,8 @@
 from launch import LaunchDescription
 from launch_ros.actions import Node
 from launch.actions import TimerAction
+from launch.actions.group import GroupAction
+from launch.actions.namespace import Namespace
 
 def generate_launch_description():
     return LaunchDescription([
@@ -25,25 +27,23 @@ def generate_launch_description():
             arguments=['-0.05', '0', '0.10', '0', '0', '0', 'base_link', 'lidar_link'],
         ),
 
-        # Odometry node
-        Node(
-            package='picar4wd_driver',
-            executable='odom_node',
-            name='odometry_node',
-            output='screen',
-        ),
-
-        # Motor driver — delayed to avoid current spike conflict
-        TimerAction(
-            period=10.0,
+        # Hardware drivers wrapped in picar_pi namespace
+        Namespace(
+            namespace='picar_pi',
             actions=[
-                Node(
-                    package='picar4wd_driver',
-                    executable='motor_driver_node',
-                    name='motor_driver_node',
-                    output='screen',
-                    parameters=[{'max_speed': 50}],
+                # Motor driver — delayed to avoid current spike conflict
+                TimerAction(
+                    period=10.0,
+                    actions=[
+                        Node(
+                            package='picar4wd_driver',
+                            executable='motor_driver_node',
+                            name='motor_driver_node',
+                            output='screen',
+                            parameters=[{'max_speed': 50}],
+                        ),
+                    ],
                 ),
-            ],
+            ]
         ),
     ])
