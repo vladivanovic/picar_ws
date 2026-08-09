@@ -24,7 +24,7 @@ class OdometryNode(Node):
         self.last_time = self.get_clock().now()
 
         self.timer = self.create_timer(0.05, self.publish_odom)
-        self.get_logger().info('Odometry node started')
+        self.get_logger().info('Odometry node started (TF broadcast disabled for SLAM-centric navigation)')
 
     def cmd_vel_callback(self, msg):
         self.linear_vel = msg.linear.x
@@ -39,16 +39,17 @@ class OdometryNode(Node):
         self.y += self.linear_vel * math.sin(self.theta) * dt
         self.theta += self.angular_vel * dt
 
-        t = TransformStamped()
-        t.header.stamp = current_time.to_msg()
-        t.header.frame_id = 'odom'
-        t.child_frame_id = 'base_link'
-        t.transform.translation.x = self.x
-        t.transform.translation.y = self.y
-        t.transform.translation.z = 0.0
-        t.transform.rotation.z = math.sin(self.theta / 2.0)
-        t.transform.rotation.w = math.cos(self.theta / 2.0)
-        self.tf_broadcaster.sendTransform(t)
+        # TF broadcast disabled: SLAM toolbox will handle map->odom->base_link transforms
+        # t = TransformStamped()
+        # t.header.stamp = current_time.to_msg()
+        # t.header.frame_id = 'odom'
+        # t.child_frame_id = 'base_link'
+        # t.transform.translation.x = self.x
+        # t.transform.translation.y = self.y
+        # t.transform.translation.z = 0.0
+        # t.transform.rotation.z = math.sin(self.theta / 2.0)
+        # t.transform.rotation.w = math.cos(self.theta / 2.0)
+        # self.tf_broadcaster.sendTransform(t)
 
         odom = Odometry()
         odom.header.stamp = current_time.to_msg()
