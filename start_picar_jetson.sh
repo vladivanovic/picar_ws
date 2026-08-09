@@ -11,11 +11,14 @@ export ROS_DOMAIN_ID=42
 ros2 run agenticros_discovery discovery_node --ros-args -p robot_namespace:=control_unit -p robot_id:=orin_master -p has_lidar:=true &
 
 # 2. Start Odometry
-ros2 run picar4wd_driver odom_node &
+ros2 run picar4wd_driver odom_node --ros-args -p use_sim_time:=false &
 
 # 3. Start SLAM Toolbox
 # Using absolute install path for the config to ensure it's found
 ros2 run slam_toolbox async_slam_toolbox_node --ros-args -p use_sim_time:=false -p slam_params_file:=$(ros2 pkg prefix slam_toolbox)/share/slam_toolbox/config/mapper_params_online_async.yaml &
+sleep 5
+ros2 lifecycle set /slam_toolbox configure
+ros2 lifecycle set /slam_toolbox activate
 
 # 4. Start Bridge (Added required src_cmd_vel argument)
 ros2 launch agenticros_bringup cmd_vel_bridge.launch.py src_cmd_vel:=/cmd_vel &
