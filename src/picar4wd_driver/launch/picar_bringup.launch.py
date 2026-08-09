@@ -25,28 +25,29 @@ def generate_launch_description():
         # Hardware drivers wrapped in picar_pi namespace
         GroupAction([
             PushRosNamespace('picar_pi'),
-            # Motor driver — start FIRST
+            # 1. Start LiDAR FIRST
             Node(
-                package='picar4wd_driver',
-                executable='motor_driver_node',
-                name='motor_driver_node',
+                package='rplidar_ros',
+                executable='rplidar_composition',
+                name='rplidar_node',
                 output='screen',
-                parameters=[{'max_speed': 50}],
+                parameters=[{
+                    'serial_port': '/dev/rplidar',
+                    'frame_id': 'lidar_link',
+                    'angle_compensate': True,
+                }],
             ),
-            # RPLiDAR A1 — start AFTER motors stabilize
+            # 2. Wait 10 seconds for LiDAR to lock and stabilize
             TimerAction(
-                period=5.0,
+                period=10.0,
                 actions=[
+                    # 3. Start motors AFTER LiDAR is already running
                     Node(
-                        package='rplidar_ros',
-                        executable='rplidar_composition',
-                        name='rplidar_node',
+                        package='picar4wd_driver',
+                        executable='motor_driver_node',
+                        name='motor_driver_node',
                         output='screen',
-                        parameters=[{
-                            'serial_port': '/dev/rplidar',
-                            'frame_id': 'lidar_link',
-                            'angle_compensate': True,
-                        }],
+                        parameters=[{'max_speed': 50}],
                     ),
                 ],
             ),
