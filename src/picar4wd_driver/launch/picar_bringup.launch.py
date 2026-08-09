@@ -22,32 +22,31 @@ def generate_launch_description():
             }],
         ),
 
-        # RPLiDAR A1 — start FIRST, let it stabilize
-        Node(
-            package='rplidar_ros',
-            executable='rplidar_composition',
-            name='rplidar_node',
-            output='screen',
-            parameters=[{
-                'serial_port': '/dev/rplidar',  # Consider creating a udev rule (e.g., in /etc/udev/rules.d/99-rplidar.rules) to consistently map the LiDAR to this path and set permissions.
-                'frame_id': 'lidar_link',
-                'angle_compensate': True,
-            }],
-        ),
-
         # Hardware drivers wrapped in picar_pi namespace
         GroupAction([
             PushRosNamespace('picar_pi'),
-            # Motor driver — delayed to avoid current spike conflict
+            # Motor driver — start FIRST
+            Node(
+                package='picar4wd_driver',
+                executable='motor_driver_node',
+                name='motor_driver_node',
+                output='screen',
+                parameters=[{'max_speed': 50}],
+            ),
+            # RPLiDAR A1 — start AFTER motors stabilize
             TimerAction(
-                period=10.0,
+                period=5.0,
                 actions=[
                     Node(
-                        package='picar4wd_driver',
-                        executable='motor_driver_node',
-                        name='motor_driver_node',
+                        package='rplidar_ros',
+                        executable='rplidar_composition',
+                        name='rplidar_node',
                         output='screen',
-                        parameters=[{'max_speed': 50}],
+                        parameters=[{
+                            'serial_port': '/dev/rplidar',
+                            'frame_id': 'lidar_link',
+                            'angle_compensate': True,
+                        }],
                     ),
                 ],
             ),
