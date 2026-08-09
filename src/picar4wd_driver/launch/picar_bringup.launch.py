@@ -1,9 +1,6 @@
-from launch import LaunchDescription
-from launch.actions import TimerAction
-from launch.actions.group import GroupAction
-from launch.actions.namespace import Namespace
+from launch.actions import TimerAction, GroupAction
+from launch_ros.actions import Node, PushRosNamespace
 from launch.substitutions import Command, PathJoinSubstitution
-from launch_ros.actions import Node
 from launch_ros.substitutions import FindPackageShare
 
 def generate_launch_description():
@@ -38,36 +35,20 @@ def generate_launch_description():
         ),
 
         # Hardware drivers wrapped in picar_pi namespace
-        Namespace(
-            namespace='picar_pi',
-            actions=[
-                # Motor driver — delayed to avoid current spike conflict
-                TimerAction(
-                    period=10.0,
-                    actions=[
-                        Node(
-                            package='picar4wd_driver',
-                            executable='motor_driver_node',
-                            name='motor_driver_node',
-                            output='screen',
-                            parameters=[{'max_speed': 50}],
-                        ),
-                    ],
-                ),
-                # Sonar scanner node (disabled)
-                # Node(
-                #     package='picar4wd_driver',
-                #     executable='sonar_node',
-                #     name='sonar_scanner_node',
-                #     output='screen',
-                #     parameters=[
-                #         {'angle_min': -60.0},
-                #         {'angle_max': 60.0},
-                #         {'angle_step': 10.0},
-                #         {'max_range': 3.0},
-                #         {'scan_rate': 1.0},
-                #     ]
-                # ),
-            ]
-        ),
+        GroupAction([
+            PushRosNamespace('picar_pi'),
+            # Motor driver — delayed to avoid current spike conflict
+            TimerAction(
+                period=10.0,
+                actions=[
+                    Node(
+                        package='picar4wd_driver',
+                        executable='motor_driver_node',
+                        name='motor_driver_node',
+                        output='screen',
+                        parameters=[{'max_speed': 50}],
+                    ),
+                ],
+            ),
+        ]),
     ])
