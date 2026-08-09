@@ -24,7 +24,6 @@ def generate_launch_description():
 
         # Hardware drivers wrapped in picar_pi namespace
         GroupAction([
-            PushRosNamespace('picar_pi'),
             # 1. Start LiDAR FIRST
             Node(
                 package='rplidar_ros',
