@@ -1,0 +1,34 @@
+# RViz2 Simulation Configuration
+# This config file sets up RViz2 for Gazebo simulation visualization
+
+# Default display setup:
+# 1. RobotModel - shows the robot URDF model
+# 2. LaserScan - shows LiDAR data
+# 3. Axes - world reference
+# 4. Grid - floor reference
+
+# To use:
+# 1. Launch Gazebo simulation: ros2 launch agenticros_bringup gazebo_sim_only.launch.py
+# 2. Launch RViz: ros2 run rviz2 rviz2 -d path/to/simulation.rviz
+# 3. Verify /scan topic is showing LiDAR data
+# 4. Verify robot model is moving (if /cmd_vel is publishing)
+
+# Window layout:
+# - Top left: RobotModel (gray robot structure)
+# - Top right: LaserScan (ranges from LiDAR)
+# - Bottom left: Axes (world X=Red, Y=Green, Z=Blue)
+# - Bottom right: Grid (floor plane)
+
+# Topics configured:
+# - RobotModel: robot_description topic
+# - LaserScan: /scan (or /lidar_scan depending on configuration)
+# - TF: shows coordinate frames (base_link, laser_link, odom, map)
+
+# If using Nav2:
+# - Add 'Pose With Covariance Stamped' to see robot pose
+# - Add 'Path' to see planned trajectories
+
+# Troubleshooting:
+# - If robot model not visible: verify robot_state_publisher is running
+# - If /scan not showing: check rplidar_node is publishing
+# - If TF errors: verify all frames are publishing correctly
