@@ -16,7 +16,7 @@ jobs:
         with:
           python-version: '3.12'
       - run: pip install pytest
-      - run: python -m pytest src/picar4wd_driver/test/test_mixing.py src/picar4wd_driver/test/test_wifi_parsing.py -q
+      - run: python -m pytest src/picar4wd_driver/test/test_mixing.py src/picar4wd_driver/test/test_wifi_parsing.py src/picar4wd_driver/test/test_wheel_odom.py -q
       - name: Byte-compile all Python
         run: python -m compileall -q src
 

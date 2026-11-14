@@ -1,11 +1,14 @@
 #!/usr/bin/env python3
-"""Command-based odometry for the PiCar-4WD.
+"""Command-based odometry for the PiCar-4WD (FALLBACK).
 
-There are no wheel encoders on this car, so this node dead-reckons the
-pose by integrating the ``cmd_vel`` stream. That is *commanded* motion,
-not measured motion: wheel slip, a stalled motor, or picking the car up
-all produce confident-looking movement. Treat the output as an aid for
-SLAM scan matching, never as ground truth.
+The standard bringup does NOT use this node: the motor driver publishes
+measured odometry from the car's rear wheel-speed sensors (see
+motor_driver_node / wheel_odom.py), which is strictly better. This node
+remains for benches where the speed sensors are unavailable: it
+dead-reckons the pose by integrating the ``cmd_vel`` stream, i.e.
+*commanded* motion, not measured motion -- wheel slip, a stalled motor,
+or picking the car up all produce confident-looking movement. Never run
+both at once: they would both publish /odom and the same TF.
 
 It publishes:
   * ``odom`` (nav_msgs/Odometry) with deliberately honest (large)

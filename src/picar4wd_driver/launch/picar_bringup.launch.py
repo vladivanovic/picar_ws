@@ -3,8 +3,10 @@
 Starts, all at once and with no artificial delays:
   * robot_state_publisher (URDF from picar_description)
   * RPLidar A1 (rplidar_ros) on /scan, frame lidar_link
-  * motor_driver_node (subscribes cmd_vel -> /cmd_vel) with watchdog
-  * odom_node (publishes /odom and the odom -> base_link TF)
+  * motor_driver_node (subscribes cmd_vel -> /cmd_vel) with watchdog,
+    publishing measured wheel-speed odometry + odom -> base_link TF
+    (the speed sensors live in the same library/GPIO as the motors,
+    and their unsigned readings need this node's power signs)
   * wifi_rssi_node (optional, include_wifi:=true by default)
 
 Topic scheme: NO namespace. The motor driver listens on /cmd_vel, the
@@ -82,14 +84,13 @@ def generate_launch_description():
                 'max_speed': 50,
                 'cmd_timeout': 0.5,
                 'track_width': 0.14,
+                # Measured odometry from the rear wheel speed sensors.
+                # effective_track_width is the SKID-STEER value, larger
+                # than the geometric 0.14 m -- calibrate it (README:
+                # "Skid steering and odometry") and put the result here.
+                'publish_odom': True,
+                'effective_track_width': 0.14,
             }],
-        ),
-
-        Node(
-            package='picar4wd_driver',
-            executable='odom_node',
-            name='odometry_node',
-            output='screen',
         ),
 
         Node(

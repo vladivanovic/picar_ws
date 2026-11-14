@@ -14,6 +14,7 @@ higher-level logic. Both machines talk over Wi-Fi on a shared ROS domain.
 | Part | Notes |
 |---|---|
 | SunFounder PiCar-4WD | Raspberry Pi + PiCar-4WD HAT |
+| Wheel speed sensors | Two 20-slot discs on the rear wheels (SunFounder library: GPIO 25 left, GPIO 4 right), unsigned cm/s |
 | RPLidar A1 | Connected to the Pi by USB (serial). **Powered from its own 5 V supply**, separate from the Pi rail — see "LiDAR power" below |
 | NVIDIA AGX Orin | Control unit, on the same LAN/subnet as the Pi |
 | Network | Both machines on the same Wi-Fi network and subnet |
@@ -112,8 +113,9 @@ ros2 topic echo /odom               # values respond to cmd_vel (dead-reckoned, 
 ros2 run teleop_twist_keyboard teleop_twist_keyboard   # drive slowly, low speed first
 ```
 
-> Odometry is currently dead-reckoned from commanded velocity, not measured
-> from the wheels — treat it as an aid to SLAM scan-matching, not truth.
+> Odometry comes from the car's rear wheel-speed sensors (see
+> "Skid steering and odometry" below) — measured, but skid-steer yaw is
+> approximate until calibrated.
 
 **Safety:** the motor driver stops the car if no `cmd_vel` arrives for
 0.5 s (watchdog). Even so: test on blocks / wheels up first, keep speeds low
@@ -176,6 +178,48 @@ that actually make it reliable:
   other two classic Pi-on-a-robot deaths.
 - Check time sync (chrony) before bringup: TF/SLAM across two machines
   hates a Pi clock that is still unsynced.
+
+## Skid steering and odometry
+
+This car steers like a tank: all four wheels are driven, and turns are a
+speed difference between the sides, with the tyres scrubbing. Two
+consequences are baked into the code:
+
+1. **Odometry is measured, not commanded.** The motor driver reads both
+   rear wheel-speed sensors and publishes `/odom` + the
+   `odom -> base_link` TF itself. (The sensors report *unsigned* speed —
+   direction comes from the power the driver is applying — and a second
+   process reading the same GPIO caused more trouble than it solved.
+   The old command-integrating `odom_node` remains in the package as a
+   fallback only; never run both.)
+2. **Yaw needs an effective track width.** Differential kinematics with
+   the geometric 0.14 m track systematically *over-reports* rotation,
+   because scrub eats some of every turn. Fed to SLAM uncorrected, that
+   is the classic "the map smears/rotates on every turn" failure. The
+   motor driver therefore takes `effective_track_width` (bringup
+   parameter), expected to end up larger than 0.14 m.
+
+**Calibrate it (10 minutes, once):**
+
+1. Mark the car's heading on the floor (tape cross). Zero odom
+   (restart bringup).
+2. Command a slow in-place rotation through exactly 5 full turns
+   (1800 deg) by eye against the tape, or drive it back to the tape mark.
+3. Read the odom yaw: `ros2 topic echo /odom` (convert orientation to yaw)
+   or watch the heading in RViz.
+4. `effective_track_width_new = effective_track_width_old x (odom_yaw / actual_yaw)`
+   — if odom claimed 2000 deg for a real 1800 deg turn, multiply by 1.11.
+5. Put the result in `picar_bringup.launch.py` and rebuild. Repeat once;
+   it converges fast.
+
+Do the same sanity check for distance (`speed_scale` parameter): drive a
+tape-measured 2 m straight line and compare `/odom` x. The SunFounder
+library hardcodes a 3.3 cm wheel radius; `speed_scale` absorbs the error.
+
+Even calibrated, treat yaw odometry as the weak channel: the published
+covariance says so, and SLAM Toolbox's scan matching is the authority in
+turns. Drive mapping runs with gentle, slower turns where you can — skid
+scrub is much worse in fast in-place spins.
 
 ## Repository layout
 
