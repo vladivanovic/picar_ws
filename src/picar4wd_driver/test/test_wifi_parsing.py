@@ -31,6 +31,8 @@ def test_iw_connected():
     assert link.connected
     assert link.ssid == 'MunakataHome'
     assert link.rssi_dbm == -52
+    assert link.bssid == 'aa:bb:cc:dd:ee:ff'
+    assert link.freq_mhz == 2437
 
 
 def test_iw_not_connected():

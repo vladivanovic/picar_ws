@@ -25,6 +25,8 @@ from typing import Optional
 class WifiLink:
     ssid: Optional[str] = None
     rssi_dbm: Optional[int] = None
+    bssid: Optional[str] = None   # the specific AP radio we're associated with
+    freq_mhz: Optional[int] = None
 
     @property
     def connected(self) -> bool:
@@ -37,15 +39,24 @@ def parse_iw_link(output: str) -> WifiLink:
         return WifiLink()
     ssid = None
     rssi = None
+    bssid = None
+    freq = None
+    first = re.search(r'Connected to ([0-9a-fA-F:]{17})', output)
+    if first:
+        bssid = first.group(1).lower()
     for line in output.splitlines():
         line = line.strip()
-        if line.startswith('SSID:'):
+        if line.startswith('freq:'):
+            m = re.search(r'(\d+)', line)
+            if m:
+                freq = int(m.group(1))
+        elif line.startswith('SSID:'):
             ssid = line.split(':', 1)[1].strip() or None
         elif line.startswith('signal:'):
             match = re.search(r'(-?\d+)\s*dBm', line)
             if match:
                 rssi = int(match.group(1))
-    return WifiLink(ssid=ssid, rssi_dbm=rssi)
+    return WifiLink(ssid=ssid, rssi_dbm=rssi, bssid=bssid, freq_mhz=freq)
 
 
 def parse_proc_wireless(output: str, interface: str = 'wlan0') -> WifiLink:

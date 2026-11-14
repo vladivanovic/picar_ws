@@ -4,6 +4,13 @@
 Publishes, every ``period`` seconds (default 2):
   /wifi/rssi    (std_msgs/Int32)  signal strength in dBm (negative)
   /wifi/ssid    (std_msgs/String) connected SSID, "" when not connected
+  /wifi/bssid   (std_msgs/String) AP radio we're associated with -- in a
+                                  multi-AP / mesh home the same SSID is
+                                  several radios, and a survey needs to
+                                  know which one each sample came from
+                                  (it also reveals roaming as the car moves)
+  /wifi/freq    (std_msgs/Int32)  channel centre frequency, MHz
+                                  (e.g. 2437 = 2.4 GHz ch 6, 5180 = 5 GHz)
   /wifi/status  (std_msgs/String) human-readable status
 
 Source of truth is ``iw dev <interface> link`` with a /proc/net/wireless
@@ -17,7 +24,7 @@ import subprocess
 
 import rclpy
 from rclpy.node import Node
-from std_msgs.msg import Int32, String
+from std_msgs.msg import Int32, String  # noqa: F401
 
 from picar4wd_driver.wifi_parsing import parse_iw_link, parse_proc_wireless
 
@@ -33,6 +40,8 @@ class WiFiRSSINode(Node):
 
         self.rssi_pub = self.create_publisher(Int32, '/wifi/rssi', 10)
         self.ssid_pub = self.create_publisher(String, '/wifi/ssid', 10)
+        self.bssid_pub = self.create_publisher(String, '/wifi/bssid', 10)
+        self.freq_pub = self.create_publisher(Int32, '/wifi/freq', 10)
         self.status_pub = self.create_publisher(String, '/wifi/status', 10)
 
         self._last_ssid = None
@@ -70,6 +79,15 @@ class WiFiRSSINode(Node):
         ssid_msg.data = link.ssid or ''
         self.ssid_pub.publish(ssid_msg)
 
+        bssid_msg = String()
+        bssid_msg.data = link.bssid or ''
+        self.bssid_pub.publish(bssid_msg)
+
+        if link.freq_mhz is not None:
+            freq_msg = Int32()
+            freq_msg.data = link.freq_mhz
+            self.freq_pub.publish(freq_msg)
+
         if link.rssi_dbm is not None:
             rssi_msg = Int32()
             rssi_msg.data = link.rssi_dbm
@@ -77,8 +95,8 @@ class WiFiRSSINode(Node):
 
         status_msg = String()
         if link.connected and link.rssi_dbm is not None:
-            status_msg.data = 'Connected to %s (RSSI: %d dBm)' % (
-                link.ssid, link.rssi_dbm)
+            status_msg.data = 'Connected to %s via %s (RSSI: %d dBm)' % (
+                link.ssid, link.bssid or '?', link.rssi_dbm)
         elif link.connected:
             status_msg.data = 'Connected to %s (RSSI unknown)' % link.ssid
         elif link.rssi_dbm is not None:
