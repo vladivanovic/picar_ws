@@ -231,7 +231,7 @@ class MotorDriverNode(Node):
         pose_cov[14] = 1e6
         pose_cov[21] = 1e6
         pose_cov[28] = 1e6
-        pose_cov[35] = 0.3
+        pose_cov[35] = 0.5
         odom.pose.covariance = pose_cov
         twist_cov = [0.0] * 36
         twist_cov[0] = 0.02

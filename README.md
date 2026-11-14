@@ -221,6 +221,38 @@ covariance says so, and SLAM Toolbox's scan matching is the authority in
 turns. Drive mapping runs with gentle, slower turns where you can — skid
 scrub is much worse in fast in-place spins.
 
+### Who wins: lidar vs wheels, and the re-entering-a-room problem
+
+Trust is ranked deliberately, in `config/slam_toolbox.yaml` + the odom
+covariances:
+
+1. **Lidar scan matching is the authority** on where the car is.
+2. **Wheel odometry is only a short-term prediction** between scans —
+   forward distance is decent; yaw from the speed sensors is the weak
+   channel (skid-steer scrub), so its published yaw covariance is large
+   and the scan matcher's penalties for disagreeing with the odom
+   prediction are set *below* upstream defaults (`distance_variance_penalty`
+   0.3, `angle_variance_penalty` 0.25, search space widened to 0.8 m).
+   It is not zero trust: in a featureless corridor the lidar has almost
+   nothing to lock onto, and there odometry has to carry the car.
+
+**Re-entering a room and getting a second, shifted copy of it** is a
+loop-closure failure: the car's drift since it last saw the room was
+larger than the distance loop closure searched, or too large for the
+local scan search window, so the scan was drawn in as new territory
+instead of snapping onto the existing plan. Defences now in place:
+loop closure searches out to **6 m** (was 3 m), the graph gets nodes
+every 0.1 m / 0.05 rad so matches get many chances, and the reduced
+yaw drift from calibrated wheel odometry (above) keeps the error
+inside what loop closure can correct. Match-quality gates were left at
+upstream values on purpose — relaxing them risks *false* loop
+closures, which bend a good map.
+
+The hard guarantee is the survey pass: in SLAM **localisation mode**
+against a saved map, the map is frozen. Re-entering a room then cannot
+redraw anything — worst case the car is briefly unsure where it is
+until the scans re-match.
+
 ## Repository layout
 
 | Path | What |

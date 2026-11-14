@@ -3,6 +3,20 @@
 #   ros2 run slam_toolbox async_slam_toolbox_node --ros-args \
 #     --params-file $(ros2 pkg prefix picar4wd_driver)/share/picar4wd_driver/config/slam_toolbox.yaml
 # For simulation, override use_sim_time:=true on the command line.
+#
+# TRUST RANKING on this robot (deliberate):
+#   1. LIDAR scan matching  -- the authority on where the car is
+#   2. Wheel-speed odometry -- only a short-term prediction between scans;
+#      forward distance is decent, YAW IS NOT (skid-steer tyre scrub),
+#      which is also why the odom message's yaw covariance is large.
+# The knobs that implement that ranking in slam_toolbox are the
+# distance/angle variance penalties and the correlation search space
+# below: smaller penalties = cheaper for the scan matcher to disagree
+# with the odometry prediction; a wider search space = it is ALLOWED
+# to disagree by more. Both are set moderately more lidar-leaning than
+# the upstream defaults (0.5 / 0.49 / 0.5 m), not at extremes -- in a
+# featureless corridor the scans have little to lock onto and odometry
+# has to carry the car, so zero trust in odom would be its own failure.
 slam_toolbox:
   ros__parameters:
     use_sim_time: false
@@ -20,9 +34,8 @@ slam_toolbox:
     max_laser_range: 8.0          # A1 can do more; indoors 8 m is plenty and faster
     minimum_time_interval: 0.2
 
-    # Scan matching does the real localisation work on this robot:
-    # odometry is dead-reckoned from commands (no encoders), so keep the
-    # matcher responsive and travels between updates small.
+    # Pose cadence: small travels between graph nodes = scan matching
+    # gets frequent votes, and loop closure gets many chances to match.
     transform_publish_period: 0.02
     transform_timeout: 0.2
     tf_buffer_duration: 10.0
@@ -30,7 +43,36 @@ slam_toolbox:
     minimum_travel_heading: 0.05
     scan_match_tolerance: 0.05
 
+    # --- Trust ranking: lidar over odometry ---
+    use_scan_matching: true
+    use_scan_barycenter: true
+    # Cost of disagreeing with the odom prediction (upstream: 0.5 / 0.49).
+    # Yaw gets distrusted hardest: skid-steer scrub corrupts it most.
+    distance_variance_penalty: 0.3
+    angle_variance_penalty: 0.25
+    # How far (m) around the odom prediction the matcher may search for
+    # the scan's true alignment (upstream default: 0.5).
+    correlation_search_space_dimension: 0.8
+    correlation_search_space_resolution: 0.01
+    correlation_search_space_smear_deviation: 0.1
+
+    # --- Loop closure: the re-entering-a-room fix ---
+    # When the car comes back into a mapped room, loop closure is what
+    # snaps the pose graph back onto the existing plan instead of
+    # drawing a second, shifted copy of the room. It can only do that
+    # if it searches far enough to cover the drift accumulated since
+    # the room was last seen -- 3 m was too tight for a whole house
+    # loop with skid-steer yaw drift; 6 m gives it a real chance.
     do_loop_closing: true
-    loop_search_maximum_distance: 3.0
+    loop_search_maximum_distance: 6.0
+    loop_search_space_dimension: 8.0
+    # Match-quality gates stay at upstream values (coarse 0.35, fine
+    # 0.45): lowering them invites FALSE loop closures, which bend a
+    # good map -- a worse failure than a missed closure.
+    loop_match_minimum_response_coarse: 0.35
+    loop_match_minimum_response_fine: 0.45
+    loop_match_minimum_chain_size: 10
+    link_match_minimum_response_fine: 0.45
+    link_scan_maximum_distance: 1.5
 
     enable_interactive_mode: true
