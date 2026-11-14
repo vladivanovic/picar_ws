@@ -20,3 +20,12 @@ Thumbs.db
 
 # Colcon
 .colcon/
+
+# Editor backups
+*.bak
+*.backup
+*~
+
+# Saved maps (keep the folder, not the data)
+/maps/*
+!/maps/.gitkeep

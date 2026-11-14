@@ -1,18 +1,21 @@
-#!/usr/bin/env python3
-"""
-Launch file for Wi-Fi RSSI node on Raspberry Pi.
-"""
+"""Launch just the Wi-Fi RSSI node (Pi), e.g. for bench testing."""
 
 from launch import LaunchDescription
-from launch.actions import ExecuteProcess
+from launch.actions import DeclareLaunchArgument
+from launch.substitutions import LaunchConfiguration
+from launch_ros.actions import Node
+
 
 def generate_launch_description():
-
-    # Start the Wi-Fi RSSI node on the Pi
-    wifi_node = ExecuteProcess(
-        cmd=['python3', '/home/vlad/picar_ws/src/picar4wd_driver/scripts/wifi_rssi_node.py'],
-        output='screen',
-        name='wifi_rssi_node'
-    )
-    
-    return LaunchDescription([wifi_node])
+    return LaunchDescription([
+        DeclareLaunchArgument(
+            'interface', default_value='wlan0',
+            description='Wi-Fi interface to report on'),
+        Node(
+            package='picar4wd_driver',
+            executable='wifi_rssi_node',
+            name='wifi_rssi_node',
+            output='screen',
+            parameters=[{'interface': LaunchConfiguration('interface')}],
+        ),
+    ])

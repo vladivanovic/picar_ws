@@ -1,37 +1,21 @@
 #!/bin/bash
-# Picar Gazebo Simulation Startup
-# NVIDIA AGX Orin (Control Unit)
-# Launches Gazebo Harmonic with diff-drive AMR
-
+# PiCar Gazebo simulation only (no SLAM) -- AGX Orin or any desktop.
+# Workspace path is derived from this script's location (an earlier
+# version hardcoded an ~/.openclaw path that existed on one machine).
 set -e
 
-WS_ROOT=/home/vlad/.openclaw/workspace/picar_ws
-ROS_DISTRO=jazzy
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+cd "$SCRIPT_DIR"
 
-# Source ROS2
-source /opt/ros/$ROS_DISTRO/setup.bash
-
-# Source workspace
-if [ -d "$WS_ROOT/install" ]; then
-    source "$WS_ROOT/install/setup.bash"
+source /opt/ros/jazzy/setup.bash
+if [ -f "$SCRIPT_DIR/install/setup.bash" ]; then
+    source "$SCRIPT_DIR/install/setup.bash"
 fi
+export ROS_DOMAIN_ID="${ROS_DOMAIN_ID:-42}"
 
-echo "==== Picar Gazebo Simulation Starting ===="
-echo "URDF: agenticros_sim/urdf/agenticros_amr.urdf.xacro (2-wheeled diff-drive)"
-echo "Sensors: RGBD camera, LiDAR (360 samples), IMU"
-echo "World: agenticros_indoor.sdf (12x12m indoor with obstacles)"
+echo "==== PiCar Gazebo simulation (domain $ROS_DOMAIN_ID) ===="
+echo "Drive: ros2 topic pub /cmd_vel geometry_msgs/msg/Twist '{linear: {x: 0.3}, angular: {z: 0.0}}' -r 10"
+echo "Scan:  ros2 topic echo /scan"
 echo ""
 
-# Launch simulator with RViz
-ros2 launch agenticros_sim sim_amr.launch.py \
-    use_rviz:=true \
-    gui:=true \
-    world:=worlds/agenticros_indoor.sdf
-
-echo ""
-echo "Press Ctrl+C to stop simulation"
-echo ""
-echo "Quick commands:"
-echo "  Drive: ros2 topic pub /cmd_vel geometry_msgs/msg/Twist '{linear: {x: 0.3}, angular: {z: 0.0}}' --rate 10"
-echo "  LiDAR: ros2 topic echo /scan"
-echo "  Depth: ros2 topic echo /camera/camera/depth/points"
+ros2 launch agenticros_sim sim_picar.launch.py use_rviz:=true gui:=true

@@ -39,8 +39,8 @@ def generate_launch_description():
             ),
             DeclareLaunchArgument(
                 "dst_cmd_vel",
-                default_value="/picar_pi/cmd_vel",
-                description="Topic the robot hardware listens on (Pi namespace: /picar_pi/cmd_vel)",
+                default_value="/cmd_vel",
+                description="Topic the robot hardware listens on (default /cmd_vel: the Pi bringup uses no namespace)",
             ),
             Node(
                 package="agenticros_bringup",

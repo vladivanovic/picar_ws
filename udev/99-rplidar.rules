@@ -1,0 +1,7 @@
+# RPLidar A1 (Silicon Labs CP210x USB-UART bridge on the adapter board).
+# Creates the stable /dev/rplidar symlink the bringup expects, regardless
+# of which ttyUSB number the adapter enumerates as.
+# Verify the IDs on your unit with `lsusb` (expect 10c4:ea60).
+# Install: sudo cp 99-rplidar.rules /etc/udev/rules.d/ && \
+#   sudo udevadm control --reload-rules && sudo udevadm trigger
+SUBSYSTEM=="tty", ATTRS{idVendor}=="10c4", ATTRS{idProduct}=="ea60", SYMLINK+="rplidar", MODE="0660", GROUP="dialout", TAG+="systemd"

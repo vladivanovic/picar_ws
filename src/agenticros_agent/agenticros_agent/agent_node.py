@@ -72,14 +72,22 @@ class AgenticROSAgentNode(Node):
 
         # Parameters: --ros-args -p key:=value > env var > hardcoded default
         self.declare_parameter("signaling_url", os.environ.get("AGENTICROS_SIGNALING_URL", "ws://localhost:8000"))
-        self.declare_parameter("robot_token", os.environ.get("AGENTICROS_ROBOT_TOKEN", "your-secret-token-1"))
-        self.declare_parameter("robot_key", os.environ.get("AGENTICROS_ROBOT_KEY", "my-secret-key"))
+        self.declare_parameter("robot_token", os.environ.get("AGENTICROS_ROBOT_TOKEN", ""))
+        self.declare_parameter("robot_key", os.environ.get("AGENTICROS_ROBOT_KEY", ""))
         self.declare_parameter("robot_id", os.environ.get("AGENTICROS_ROBOT_ID", "robot_1"))
 
         self.signaling_url: str = self.get_parameter("signaling_url").value
         self.robot_token: str = self.get_parameter("robot_token").value
         self.robot_key: str = self.get_parameter("robot_key").value
         self.robot_id: str = self.get_parameter("robot_id").value
+
+        if not self.robot_token or not self.robot_key:
+            raise RuntimeError(
+                "robot_token and robot_key must be set (via --ros-args or "
+                "AGENTICROS_ROBOT_TOKEN / AGENTICROS_ROBOT_KEY). There are "
+                "no default secrets: this node bridges the whole ROS graph "
+                "to a remote peer."
+            )
 
         # WebRTC state
         self.pc: RTCPeerConnection | None = None

@@ -1,0 +1,37 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  pure-python-tests:
+    # The hardware-independent logic (mixing, Wi-Fi parsing) tests
+    # anywhere -- no ROS install needed. These are the tests that would
+    # have caught the parser bugs fixed in 2026-11.
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install pytest
+      - run: python -m pytest src/picar4wd_driver/test/test_mixing.py src/picar4wd_driver/test/test_wifi_parsing.py -q
+      - name: Byte-compile all Python
+        run: python -m compileall -q src
+
+  colcon-build:
+    runs-on: ubuntu-24.04
+    container: ros:jazzy-ros-base
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install deps and build the PiCar packages
+        shell: bash
+        run: |
+          apt-get update
+          rosdep update
+          # picar_description + driver + msgs only: the full workspace
+          # includes simulation deps that are heavy in CI.
+          rosdep install --from-paths src/picar4wd_driver src/picar_description src/agenticros_msgs --ignore-src -r -y || true
+          source /opt/ros/jazzy/setup.bash
+          colcon build --packages-select picar_description agenticros_msgs picar4wd_driver

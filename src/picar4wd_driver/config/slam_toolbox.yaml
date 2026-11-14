@@ -1,0 +1,36 @@
+# SLAM Toolbox (online async) parameters for the PiCar + RPLidar A1.
+# Used on the Orin in real mode:
+#   ros2 run slam_toolbox async_slam_toolbox_node --ros-args \
+#     --params-file $(ros2 pkg prefix picar4wd_driver)/share/picar4wd_driver/config/slam_toolbox.yaml
+# For simulation, override use_sim_time:=true on the command line.
+slam_toolbox:
+  ros__parameters:
+    use_sim_time: false
+
+    # Frames / topics -- must match picar_bringup (Pi) and the URDF.
+    odom_frame: odom
+    map_frame: map
+    base_frame: base_link
+    scan_topic: /scan
+    mode: mapping
+
+    # Map
+    resolution: 0.05
+    map_update_interval: 1.0
+    max_laser_range: 8.0          # A1 can do more; indoors 8 m is plenty and faster
+    minimum_time_interval: 0.2
+
+    # Scan matching does the real localisation work on this robot:
+    # odometry is dead-reckoned from commands (no encoders), so keep the
+    # matcher responsive and travels between updates small.
+    transform_publish_period: 0.02
+    transform_timeout: 0.2
+    tf_buffer_duration: 10.0
+    minimum_travel_distance: 0.1
+    minimum_travel_heading: 0.05
+    scan_match_tolerance: 0.05
+
+    do_loop_closing: true
+    loop_search_maximum_distance: 3.0
+
+    enable_interactive_mode: true

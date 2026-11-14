@@ -1,91 +1,63 @@
 #!/bin/bash
-# Raspberry Pi (Jazzy) startup script
-# Updated: Now includes Wi-Fi RSSI tracking alongside robot bringup
-# Usage: ./start_picar_pi.sh [real|sim]
+# Raspberry Pi startup -- real robot hardware.
+# Usage: ./start_picar_pi.sh [--no-wifi]
 #
-# Modes:
-#   real  - Full robot with LiDAR, motors, Wi-Fi RSSI tracking
-#   sim   - Wi-Fi signal simulation for Gazebo mapping
+# Runs picar_bringup in the FOREGROUND (lidar, motors, odometry,
+# robot_state_publisher, Wi-Fi RSSI). Run it under systemd or tmux for
+# unattended use; Ctrl+C stops everything cleanly.
+#
+# One-time setup lives in the README (udev rule for /dev/rplidar, user in
+# dialout/gpio groups). This script deliberately does NOT sudo-chmod
+# /dev/mem, /dev/gpiomem or the serial port on every run -- an earlier
+# version did, and world-writable /dev/mem is a serious security hole
+# that also has to be redone after every reboot.
+set -e
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+cd "$SCRIPT_DIR"
 
 source /opt/ros/jazzy/setup.bash
-source ~/picar_ws/install/setup.bash
-export ROS_DOMAIN_ID=42
-export PYTHONPATH=$PYTHONPATH:/home/ubuntu/picar-4wd
-
-# ============================================
-# PARSE ARGUMENTS
-# ============================================
-MODE="${1:-real}"  # Default to real mode
-
-echo "============================================"
-echo "Picar Pi Startup - Mode: $MODE"
-echo "============================================"
-
-# GPIO and serial port permissions (required on the Pi)
-echo "[1/5] Setting GPIO/serial permissions..."
-sudo chmod 666 /dev/mem
-sudo chmod 666 /dev/gpiomem
-sudo chmod 666 /dev/ttyUSB0
-
-# ============================================
-# REAL MODE: Full robot with Wi-Fi tracking
-# ============================================
-if [ "$MODE" = "real" ]; then
-    echo ""
-    echo "[REAL MODE] Starting robot bringup with Wi-Fi RSSI tracking..."
-    
-    # 1. Launch complete bringup (LiDAR, odometry, motor driver)
-    echo "[2/5] Starting Picar bringup (LiDAR, odometry, motors)..."
-    ros2 launch picar4wd_driver picar_bringup.launch.py &
-    
-    # 2. Start Wi-Fi RSSI node
-    echo "[3/5] Starting Wi-Fi RSSI node..."
-    ros2 run picar4wd_driver wifi_rssi_node.py &
-    
-    # Verify Wi-Fi node is publishing
-    sleep 3
-    echo "[4/5] Verifying Wi-Fi topics..."
-    ros2 topic list | grep -E "/wifi/"
-    
-    # 5. Completion
-    echo "[5/5] Real mode setup complete!"
-    echo ""
-    echo "✅ Robot: Enabled (motors, LiDAR, hardware)"
-    echo "   Wi-Fi:   Tracking connected SSID RSSI"
-    echo "   Topics:  /wifi/rssi, /wifi/ssid, /wifi/status"
-    echo "   Control: Use /cmd_vel for motor control"
-    echo ""
-
-# ============================================
-# SIMULATION MODE: Wi-Fi signal simulation for Gazebo
-# ============================================
-elif [ "$MODE" = "sim" ]; then
-    echo ""
-    echo "[SIMULATION MODE] Starting Wi-Fi signal simulation for Gazebo mapping..."
-    
-    echo "[1/3] Starting Wi-Fi map overlay node (simulated RSSI)..."
-    ros2 run picar4wd_driver wifi_map_overlay_node.py &
-    WIFI_PID=$!
-    sleep 3
-    
-    echo "[2/3] Wi-Fi overlay ready - generating synthetic signal strengths..."
-    echo "   - Will create heat map markers in RViz2"
-    echo "   - Green=strong, Yellow=medium, Red=weak signal"
-    echo "   - Markers follow robot path in Gazebo simulation"
-    
-    echo "[3/3] Simulation mode Wi-Fi ready!"
-    echo ""
-    echo "   To use with Gazebo simulation:"
-    echo "     ros2 launch agenticros_bringup gazebo_sim_only.launch.py"
-    echo "     # Then in separate terminal:"
-    echo "     ros2 run picar4wd_driver wifi_map_overlay_node.py"
-    echo "     ros2 run rviz2 rviz2 -d $HOME/picar_ws/src/agenticros_bringup/rviz/simulation.rviz"
-    echo ""
-    echo "   The Wi-Fi node will generate synthetic RSSI values based on"
-    echo "   robot position, creating a heat map as you move the robot."
-    echo ""
-
-else
-    echo "ERROR: Unknown mode '$MODE'. Use 'real' or 'sim'."
+if [ ! -f "$SCRIPT_DIR/install/setup.bash" ]; then
+    echo "Workspace not built. Run: colcon build --symlink-install" >&2
     exit 1
 fi
+source "$SCRIPT_DIR/install/setup.bash"
+export ROS_DOMAIN_ID="${ROS_DOMAIN_ID:-42}"
+
+# SunFounder picar-4wd library: prefer an installed copy; fall back to a
+# checkout next to the workspace or in the home directory. Override by
+# exporting PICAR_4WD_PATH before running this script.
+if ! python3 -c "import picar_4wd" 2>/dev/null; then
+    for cand in "${PICAR_4WD_PATH:-}" "$HOME/picar-4wd" "$SCRIPT_DIR/../picar-4wd"; do
+        if [ -n "$cand" ] && [ -d "$cand" ]; then
+            export PYTHONPATH="$cand:${PYTHONPATH:-}"
+            break
+        fi
+    done
+fi
+if ! python3 -c "import picar_4wd" 2>/dev/null; then
+    echo "WARNING: picar_4wd library not importable; motor/sonar nodes will fail." >&2
+    echo "Install SunFounder picar-4wd or set PICAR_4WD_PATH to its location." >&2
+fi
+
+# Loud, early checks instead of mysterious node crashes later.
+if [ ! -e /dev/rplidar ]; then
+    echo "WARNING: /dev/rplidar does not exist." >&2
+    echo "Is the lidar plugged in, and is udev/99-rplidar.rules installed?" >&2
+fi
+if ! id -nG "$USER" | grep -qw dialout; then
+    echo "WARNING: $USER is not in the dialout group (serial access may fail)." >&2
+fi
+# Pi health: under-voltage / throttling history (0x0 is clean). This is
+# the check that would have caught the lidar power problem immediately.
+if command -v vcgencmd >/dev/null 2>&1; then
+    echo "Pi throttle status: $(vcgencmd get_throttled)  (throttled=0x0 is clean)"
+fi
+
+INCLUDE_WIFI=true
+if [ "${1:-}" = "--no-wifi" ]; then
+    INCLUDE_WIFI=false
+fi
+
+echo "Starting PiCar bringup (domain $ROS_DOMAIN_ID, wifi=$INCLUDE_WIFI)..."
+exec ros2 launch picar4wd_driver picar_bringup.launch.py include_wifi:=$INCLUDE_WIFI

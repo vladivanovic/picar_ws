@@ -1,129 +1,93 @@
 #!/bin/bash
-# Jetson Orin Nano startup script
-# Optimized for both real robot AND simulation modes
+# AGX Orin (control unit) startup.
 # Usage: ./start_picar_jetson.sh [real|sim]
 #
-# Modes:
-#   real  - Full robot with SLAM, navigation, real hardware
-#   sim   - Gazebo simulation with SLAM, Wi-Fi heat map overlay
+#   real - SLAM Toolbox + cmd_vel relay + Wi-Fi heat-map overlay + RViz
+#          against the real car. Odometry runs ON THE PI (the odometry
+#          node moved there -- it integrates the command stream the
+#          motors actually receive, and publishes odom -> base_link).
+#   sim  - PiCar in Gazebo + SLAM Toolbox (sim time) + overlay + RViz.
+#
+# Workspace path is derived from this script's location -- an earlier
+# version hardcoded an ~/.openclaw/workspace path that only existed on
+# one machine.
+set -e
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+cd "$SCRIPT_DIR"
+MODE="${1:-real}"
 
 source /opt/ros/jazzy/setup.bash
-source ~/.openclaw/workspace/picar_ws/install/setup.bash
-export ROS_DOMAIN_ID=42
+if [ ! -f "$SCRIPT_DIR/install/setup.bash" ]; then
+    echo "Workspace not built. Run: colcon build --symlink-install" >&2
+    exit 1
+fi
+source "$SCRIPT_DIR/install/setup.bash"
+export ROS_DOMAIN_ID="${ROS_DOMAIN_ID:-42}"
 
-# ============================================
-# PARSE ARGUMENTS
-# ============================================
-MODE="${1:-real}"  # Default to real mode
+SLAM_PARAMS="$(ros2 pkg prefix picar4wd_driver)/share/picar4wd_driver/config/slam_toolbox.yaml"
 
-echo "============================================"
-echo "Picar Jetson Startup - Mode: $MODE"
-echo "============================================"
+PIDS=()
+cleanup() {
+    echo "Stopping..."
+    for pid in "${PIDS[@]:-}"; do kill "$pid" 2>/dev/null || true; done
+}
+trap cleanup INT TERM EXIT
 
-# ============================================
-# REAL MODE: Full robot with hardware
-# ============================================
 if [ "$MODE" = "real" ]; then
-    echo ""
-    echo "[REAL MODE] Starting full robot stack..."
-    
-    # 1. Start Discovery Agent
-    echo "[1/5] Starting Discovery Agent..."
-    ros2 run agenticros_discovery discovery_node --ros-args -p robot_namespace:=control_unit -p robot_id:=orin_master -p has_lidar:=true &
-    
-    # 2. Start Odometry
-    echo "[2/5] Starting Odometry..."
-    ros2 run picar4wd_driver odom_node --ros-args -p use_sim_time:=false &
-    
-    # 3. Start SLAM Toolbox
-    echo "[3/5] Starting SLAM Toolbox..."
-    ros2 run slam_toolbox async_slam_toolbox_node --ros-args -p use_sim_time:=false -p slam_params_file:=$(ros2 pkg prefix slam_toolbox)/share/slam_toolbox/config/mapper_params_online_async.yaml &
-    sleep 5
-    ros2 lifecycle set /slam_toolbox configure
-    ros2 lifecycle set /slam_toolbox activate
-    
-    # 4. Start Bridge (Added required src_cmd_vel argument)
-    echo "[4/5] Starting CMD Vel Bridge..."
-    ros2 launch agenticros_bringup cmd_vel_bridge.launch.py src_cmd_vel:=/cmd_vel &
-    
-    # 5. Start RViz
-    echo "[5/5] Starting RViz..."
-    RVIZ_CFG="$HOME/.openclaw/workspace/picar_ws/src/agenticros_bringup/rviz/turtlebot3_agenticros.rviz"
+    echo "=== PiCar Orin startup: REAL (domain $ROS_DOMAIN_ID) ==="
+
+    # No cmd_vel relay in the standard setup: teleop/Nav2 publish
+    # /cmd_vel here, the Pi's motor driver subscribes /cmd_vel, and DDS
+    # connects them directly on the shared domain. The relay
+    # (agenticros_bringup cmd_vel_bridge.launch.py) only matters when a
+    # namespaced source -- e.g. AgenticROS publishing /<ns>/cmd_vel --
+    # needs forwarding to /cmd_vel; launch it separately in that case.
+    echo "[1/4] (no cmd_vel relay needed -- DDS connects /cmd_vel directly)"
+
+    echo "[2/4] SLAM Toolbox (params: $SLAM_PARAMS)"
+    ros2 run slam_toolbox async_slam_toolbox_node --ros-args \
+        --params-file "$SLAM_PARAMS" -p use_sim_time:=false &
+    PIDS+=($!)
+    sleep 3
+    ros2 lifecycle set /slam_toolbox configure || true
+    ros2 lifecycle set /slam_toolbox activate || true
+
+    echo "[3/4] Wi-Fi heat-map overlay (positions from /odom)"
+    ros2 run picar4wd_driver wifi_map_overlay_node &
+    PIDS+=($!)
+
+    echo "[4/4] RViz (foreground; close it or Ctrl+C to stop everything)"
+    RVIZ_CFG="$SCRIPT_DIR/src/agenticros_sim/config/picar_view.rviz"
     if [ -f "$RVIZ_CFG" ]; then
         ros2 run rviz2 rviz2 -d "$RVIZ_CFG"
     else
         ros2 run rviz2 rviz2
     fi
-    
-    echo ""
-    echo "✅ Real mode startup complete!"
-    echo "   Robot: Enabled (motors, LiDAR, hardware)"
-    echo "   SLAM: Active (slam_toolbox)"
-    echo "   Navigation: Ready ( Nav2 via cmd_vel_bridge)"
-    echo ""
 
-# ============================================
-# SIMULATION MODE: Gazebo + SLAM + Wi-Fi Heat Map
-# ============================================
 elif [ "$MODE" = "sim" ]; then
-    echo ""
-    echo "[SIMULATION MODE] Starting Gazebo simulation with SLAM and Wi-Fi heat map..."
-    
-    # 1. Start Gazebo Simulation (separate terminal-friendly)
-    echo "[1/5] Starting Gazebo simulation only..."
-    ros2 launch agenticros_bringup gazebo_sim_only.launch.py &
-    GAZEO_PID=$!
-    
-    # Wait for Gazebo to initialize
-    sleep 8
-    
-    # 2. Start RTAB-Map for SLAM/Mapping
-    echo "[2/5] Starting RTAB-Map SLAM for mapping..."
-    ros2 launch agenticros_bringup rtabmap_house_mapping.launch.py use_sim_time:=true &
-    RTABMAP_PID=$!
-    sleep 5
-    
-    # 3. Start Wi-Fi RSSI node on Pi (simulated data)
-    echo "[3/5] Starting Wi-Fi RSSI overlay node..."
-    ros2 run picar4wd_driver wifi_map_overlay_node.py &
-    WIFI_PID=$!
-    sleep 3
-    
-    # 4. Start RViz2 with mapping config
-    echo "[4/5] Starting RViz2 with mapping configuration..."
-    RVIZ_CFG="$HOME/picar_ws/src/agenticros_bringup/rviz/rtabmap_house_mapping.rviz"
-    if [ -f "$RVIZ_CFG" ]; then
-        ros2 run rviz2 rviz2 -d "$RVIZ_CFG" &
-    else
-        ros2 run rviz2 rviz2 &
-    fi
-    RVIZ_PID=$!
-    sleep 3
-    
-    # 5. Summary
-    echo "[5/5] Setup complete! All nodes running."
-    echo ""
-    echo "============================================"
-    echo "SIMULATION MODE ACTIVE"
-    echo "============================================"
-    echo "   Gazebo:     Running (PID: $GAZEO_PID)"
-    echo "   RTAB-Map:   Mapping active (PID: $RTABMAP_PID)"
-    echo "   Wi-Fi:      Heat map overlay (PID: $WIFI_PID)"
-    echo "   RViz2:      Visualization active (PID: $RVIZ_PID)"
-    echo ""
-    echo "   To stop all processes, run: kill $GAZEO_PID $RTABMAP_PID $WIFI_PID $RVIZ_PID"
-    echo ""
-    echo "   Robot control (in separate terminal):"
-    echo "     ros2 topic pub /cmd_vel geometry_msgs/msg/Twist '{linear: {x: 0.5, y: 0.0}, angular: {z: 0.0}}' -r 10"
-    echo ""
-    echo "   Mapping the house:"
-    echo "     1. Move robot around all rooms and hallways"
-    echo "     2. Watch green/yellow/red spheres appear in RViz2 (Wi-Fi signal)"
-    echo "     3. Return to start area for loop closure"
-    echo "     4. Save map in rtabmap_viz: File → Save Map"
-    echo ""
+    echo "=== PiCar Orin startup: SIMULATION (domain $ROS_DOMAIN_ID) ==="
 
+    echo "[1/3] PiCar in Gazebo (with its RViz)"
+    ros2 launch agenticros_sim sim_picar.launch.py use_rviz:=true &
+    PIDS+=($!)
+    sleep 8
+
+    echo "[2/3] SLAM Toolbox (sim time)"
+    ros2 run slam_toolbox async_slam_toolbox_node --ros-args \
+        --params-file "$SLAM_PARAMS" -p use_sim_time:=true &
+    PIDS+=($!)
+    sleep 3
+    ros2 lifecycle set /slam_toolbox configure || true
+    ros2 lifecycle set /slam_toolbox activate || true
+
+    echo "[3/3] Wi-Fi heat-map overlay"
+    ros2 run picar4wd_driver wifi_map_overlay_node --ros-args -p use_sim_time:=true &
+    PIDS+=($!)
+
+    echo "Running. Drive with teleop or /cmd_vel publishes. Ctrl+C stops all."
+    wait
 else
-    echo "ERROR: Unknown mode '$MODE'. Use 'real' or 'sim'."
+    echo "ERROR: Unknown mode '$MODE'. Use 'real' or 'sim'." >&2
     exit 1
 fi

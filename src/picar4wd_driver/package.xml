@@ -2,15 +2,26 @@
 <?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
 <package format="3">
   <name>picar4wd_driver</name>
-  <version>0.0.0</version>
-  <description>TODO: Package description</description>
-  <maintainer email="ubuntu@todo.todo">ubuntu</maintainer>
-  <license>TODO: License declaration</license>
+  <version>0.1.0</version>
+  <description>ROS 2 drivers for the SunFounder PiCar-4WD: motor driver with cmd_vel watchdog, command odometry, sonar, and Wi-Fi RSSI / heat-map nodes.</description>
+  <maintainer email="vladivanovic@gmail.com">Vlad Ivanovic</maintainer>
+  <license>MIT</license>
 
   <depend>rclpy</depend>
   <depend>geometry_msgs</depend>
   <depend>sensor_msgs</depend>
   <depend>nav_msgs</depend>
+  <depend>std_msgs</depend>
+  <depend>visualization_msgs</depend>
+  <depend>tf2_ros</depend>
+
+  <!-- Not ROS packages: the SunFounder picar-4wd Python library must be
+       installed on the Pi separately (see README). The packages below are
+       needed by this package's launch files. -->
+  <exec_depend>picar_description</exec_depend>
+  <exec_depend>robot_state_publisher</exec_depend>
+  <exec_depend>rplidar_ros</exec_depend>
+  <exec_depend>xacro</exec_depend>
 
   <test_depend>ament_copyright</test_depend>
   <test_depend>ament_flake8</test_depend>
